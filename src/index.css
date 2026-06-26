@@ -1,0 +1,158 @@
+@import url('https://api.fontshare.com/v2/css?f[]=switzer@300,400,500,600,700,800,900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
+@import "tailwindcss";
+
+:root {
+  --bone: #F2EFE9;
+  --bone-dark: #EAE6DE;
+  --ink: #1B1713;
+  --ink-text: #372D2B;
+  --ink-soft: #4F4948;
+  --orange-accent: #F44E14;
+  --orange-deep: #E03A00;
+  --orange-hot: #FF6A2B;
+  --border-line: rgba(27, 23, 19, 0.14);
+  --border-strong: rgba(27, 23, 19, 0.32);
+  --success-green: #3DCC6D;
+
+  /* Sidebar specifically dark in light mode */
+  --sidebar-bg: #1B1713;
+  --sidebar-fg: #F2EFE9;
+
+  /* Modals/Dialogs specifically dark in both modes for contrast */
+  --dialog-bg: #1B1713;
+  --dialog-fg: #F2EFE9;
+  --dialog-border: rgba(242, 239, 233, 0.15);
+}
+
+.dark {
+  --bone: #120F0E;
+  --bone-dark: #1B1715;
+  --ink: #F2EFE9;
+  --ink-text: #EAE6DE;
+  --ink-soft: #8D8276;
+  --orange-accent: #FF5A1F;
+  --orange-deep: #FF6A2B;
+  --orange-hot: #FF8452;
+  --border-line: rgba(234, 230, 222, 0.14);
+  --border-strong: rgba(234, 230, 222, 0.32);
+
+  /* Sidebar in dark mode */
+  --sidebar-bg: #1B1715;
+  --sidebar-fg: #EAE6DE;
+
+  /* Dialogs in dark mode */
+  --dialog-bg: #1B1715;
+  --dialog-fg: #EAE6DE;
+  --dialog-border: rgba(234, 230, 222, 0.15);
+}
+
+@theme {
+  --font-sans: 'Switzer', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Space Mono', monospace;
+
+  --color-bone: var(--bone);
+  --color-bone-dark: var(--bone-dark);
+  --color-ink: var(--ink);
+  --color-ink-text: var(--ink-text);
+  --color-ink-soft: var(--ink-soft);
+  --color-orange-accent: var(--orange-accent);
+  --color-orange-deep: var(--orange-deep);
+  --color-orange-hot: var(--orange-hot);
+  --color-border-line: var(--border-line);
+  --color-border-strong: var(--border-strong);
+  --color-success-green: var(--success-green);
+
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-sidebar-fg: var(--sidebar-fg);
+
+  --color-dialog-bg: var(--dialog-bg);
+  --color-dialog-fg: var(--dialog-fg);
+  --color-dialog-border: var(--dialog-border);
+}
+
+@layer base {
+  body {
+    background-color: var(--bone);
+    color: var(--ink-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* Custom scrollbar matching Krumos aesthetics */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--bone-dark);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--ink);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--ink-soft);
+  }
+}
+
+@utility krumos-eyebrow {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+@utility krumos-heading {
+  text-transform: uppercase;
+  letter-spacing: -0.012em;
+  font-weight: 800;
+}
+
+@utility krumos-mono-btn {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-weight: 700;
+  font-size: 0.75rem;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@utility krumos-card {
+  background-color: var(--ink);
+  color: var(--bone);
+  border: 1px solid var(--border-strong);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@utility krumos-card-light {
+  background-color: var(--bone-dark);
+  color: var(--ink);
+  border: 1px solid var(--border-line);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Custom classes for clean borders */
+.krumos-border-b {
+  border-bottom: 1px solid var(--border-line);
+}
+.krumos-border-r {
+  border-right: 1px solid var(--border-line);
+}
+.krumos-border-l {
+  border-left: 1px solid var(--border-line);
+}
+.krumos-border-t {
+  border-top: 1px solid var(--border-line);
+}
+.krumos-border {
+  border: 1px solid var(--border-line);
+}
+
+/* Card details standard border overlay */
+.krumos-card-border {
+  border: 1px solid var(--border-strong);
+}
