@@ -3,13 +3,15 @@ import { Routes as ReactRouterRoutes, Route, Navigate } from 'react-router-dom';
 import { APP_ROUTES } from './index';
 import { useAuth } from '../context/AuthContext';
 import WorkspaceLayout from '../components/WorkspaceLayout';
-import Login from '../pages/Login';
-import AuthCallback from '../pages/AuthCallback';
-import Onboarding from '../pages/Onboarding';
-import Dashboard from '../pages/Dashboard';
-import Members from '../pages/Members';
-import Board from '../pages/Board';
-import AcceptInvite from '../pages/AcceptInvite';
+
+// Lazy load route pages
+const Login = React.lazy(() => import('../pages/Login'));
+const AuthCallback = React.lazy(() => import('../pages/AuthCallback'));
+const Onboarding = React.lazy(() => import('../pages/Onboarding'));
+const Dashboard = React.lazy(() => import('../pages/Dashboard'));
+const Members = React.lazy(() => import('../pages/Members'));
+const Board = React.lazy(() => import('../pages/Board'));
+const AcceptInvite = React.lazy(() => import('../pages/AcceptInvite'));
 
 // Loading Screen Component
 const LoadingScreen: React.FC = () => (
@@ -97,51 +99,53 @@ const GuestRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 const Routes: React.FC = () => {
   return (
-    <ReactRouterRoutes>
-      {/* Public / Callback routes */}
-      <Route
-        path={APP_ROUTES.LOGIN}
-        element={
-          <GuestRoute>
-            <Login />
-          </GuestRoute>
-        }
-      />
-      <Route path={APP_ROUTES.AUTH_CALLBACK} element={<AuthCallback />} />
-
-      {/* Accept invite portal (accessible when logged in or guest) */}
-      <Route path={APP_ROUTES.ACCEPT_INVITE} element={<AcceptInvite />} />
-
-      {/* Onboarding Workspace creation */}
-      <Route
-        path={APP_ROUTES.ONBOARDING}
-        element={
-          <OnboardingRoute>
-            <Onboarding />
-          </OnboardingRoute>
-        }
-      />
-
-      {/* Main Workspace Workspace Layout Portal Shell */}
-      <Route
-        path={APP_ROUTES.ROOT}
-        element={
-          <ProtectedRoute>
-            <WorkspaceLayout />
-          </ProtectedRoute>
-        }
-      >
-        <Route index element={<Dashboard />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="board" element={<Board />} />
-        <Route path="members" element={<Members />} />
-        {/* Redirect unknown routes */}
+    <React.Suspense fallback={<LoadingScreen />}>
+      <ReactRouterRoutes>
+        {/* Public / Callback routes */}
         <Route
-          path={APP_ROUTES.NOT_FOUND}
-          element={<Navigate to={APP_ROUTES.ROOT} replace />}
+          path={APP_ROUTES.LOGIN}
+          element={
+            <GuestRoute>
+              <Login />
+            </GuestRoute>
+          }
         />
-      </Route>
-    </ReactRouterRoutes>
+        <Route path={APP_ROUTES.AUTH_CALLBACK} element={<AuthCallback />} />
+
+        {/* Accept invite portal (accessible when logged in or guest) */}
+        <Route path={APP_ROUTES.ACCEPT_INVITE} element={<AcceptInvite />} />
+
+        {/* Onboarding Workspace creation */}
+        <Route
+          path={APP_ROUTES.ONBOARDING}
+          element={
+            <OnboardingRoute>
+              <Onboarding />
+            </OnboardingRoute>
+          }
+        />
+
+        {/* Main Workspace Workspace Layout Portal Shell */}
+        <Route
+          path={APP_ROUTES.ROOT}
+          element={
+            <ProtectedRoute>
+              <WorkspaceLayout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Dashboard />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="board" element={<Board />} />
+          <Route path="members" element={<Members />} />
+          {/* Redirect unknown routes */}
+          <Route
+            path={APP_ROUTES.NOT_FOUND}
+            element={<Navigate to={APP_ROUTES.ROOT} replace />}
+          />
+        </Route>
+      </ReactRouterRoutes>
+    </React.Suspense>
   );
 };
 

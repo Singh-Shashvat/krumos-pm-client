@@ -16,9 +16,9 @@
   --border-strong: rgba(27, 23, 19, 0.32);
   --success-green: #3DCC6D;
 
-  /* Sidebar specifically dark in light mode */
-  --sidebar-bg: #1B1713;
-  --sidebar-fg: #F2EFE9;
+  /* Sidebar responsive matching the theme */
+  --sidebar-bg: var(--bone-dark);
+  --sidebar-fg: var(--ink-text);
 
   /* Modals/Dialogs specifically dark in both modes for contrast */
   --dialog-bg: #1B1713;
@@ -39,8 +39,8 @@
   --border-strong: rgba(234, 230, 222, 0.32);
 
   /* Sidebar in dark mode */
-  --sidebar-bg: #1B1715;
-  --sidebar-fg: #EAE6DE;
+  --sidebar-bg: var(--bone-dark);
+  --sidebar-fg: var(--ink-text);
 
   /* Dialogs in dark mode */
   --dialog-bg: #1B1715;
@@ -133,6 +133,11 @@
   color: var(--ink);
   border: 1px solid var(--border-line);
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@utility krumos-overlay {
+  background-color: rgba(27, 23, 19, 0.75);
+  backdrop-filter: blur(4px);
 }
 
 /* Custom classes for clean borders */

@@ -57,7 +57,12 @@ export const AnalyticsSection: React.FC<AnalyticsSectionProps> = ({
                     No active projects found
                   </div>
                 ) : (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer
+                    width="100%"
+                    height="100%"
+                    minWidth={0}
+                    minHeight={0}
+                  >
                     <BarChart
                       data={tasksByProject}
                       margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
@@ -133,7 +138,12 @@ export const AnalyticsSection: React.FC<AnalyticsSectionProps> = ({
                     No members joined in workspace
                   </div>
                 ) : (
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer
+                    width="100%"
+                    height="100%"
+                    minWidth={0}
+                    minHeight={0}
+                  >
                     <BarChart
                       data={teamWorkload}
                       layout="vertical"

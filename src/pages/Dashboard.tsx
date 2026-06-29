@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useWorkspace } from '../context/WorkspaceContext';
 import { useSocket } from '../context/SocketContext';
 import { useQueryClient } from '@tanstack/react-query';
 import queryKeys from '../api/queryKeys';
@@ -13,7 +13,7 @@ import { ActivityFeed } from '../components/dashboard/ActivityFeed';
 import { AnalyticsSection } from '../components/dashboard/AnalyticsSection';
 
 const Dashboard: React.FC = () => {
-  const { activeWorkspace, activeRole } = useAuth();
+  const { activeWorkspace, activeRole } = useWorkspace();
   const { registerListener } = useSocket();
   const queryClient = useQueryClient();
 

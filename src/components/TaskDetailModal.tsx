@@ -1,71 +1,58 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useWorkspace } from '../context/WorkspaceContext';
 import { useSocket } from '../context/SocketContext';
-import api from '../services/api';
+import { useToast } from '../context/ToastContext';
+import { useGetMembers } from '../api/useMembersApi';
+import {
+  useGetTaskDetail,
+  useGetComments,
+  useGetTaskLogs,
+  useUpdateTaskField,
+  useAddComment,
+  useEditComment,
+  useDeleteComment,
+} from '../api/useTaskDetailApi';
+import { getMessageFromError } from '../utils';
 import { X, MessageSquare, History, Edit2 } from 'lucide-react';
+import { ConfirmDialog } from './common/ConfirmDialog';
+import { useQueryClient } from '@tanstack/react-query';
+import queryKeys from '../api/queryKeys';
+import type { Task } from '../types/board';
 
 interface TaskDetailModalProps {
   taskId: string;
   onClose: () => void;
 }
 
-interface Member {
-  id: string;
-  userId: string;
-  role: string;
-  user: {
-    id: string;
-    name: string;
-    picture: string;
-  };
-}
-
-interface TaskDetails {
-  id: string;
-  title: string;
-  description: string;
-  status: 'TO_DO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE';
-  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
-  dueDate: string | null;
-  assigneeId: string | null;
-}
-
-interface Comment {
-  id: string;
-  text: string;
-  createdAt: string;
-  authorId: string;
-  author: {
-    id: string;
-    name: string;
-    picture: string;
-  };
-}
-
-interface ActivityLog {
-  id: string;
-  eventType: string;
-  description: string;
-  createdAt: string;
-  performer: {
-    id: string;
-    name: string;
-  } | null;
-}
-
 const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   taskId,
   onClose,
 }) => {
-  const { activeWorkspace, activeRole, user: currentUser } = useAuth();
+  const { user: currentUser } = useAuth();
+  const { activeWorkspace, activeRole } = useWorkspace();
   const { registerListener } = useSocket();
+  const toast = useToast();
+  const queryClient = useQueryClient();
 
-  const [task, setTask] = useState<TaskDetails | null>(null);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const modalRef = useRef<HTMLDivElement>(null);
 
-  // Editing Fields
+  // Queries
+  const { data: task, isLoading: isTaskLoading } = useGetTaskDetail(
+    activeWorkspace?.id,
+    taskId
+  );
+  const { data: members = [] } = useGetMembers(activeWorkspace?.id);
+  const { data: comments = [] } = useGetComments(activeWorkspace?.id, taskId);
+  const { data: logs = [] } = useGetTaskLogs(activeWorkspace?.id, taskId);
+
+  // Mutations
+  const updateFieldMutation = useUpdateTaskField(activeWorkspace?.id, taskId);
+  const addCommentMutation = useAddComment(activeWorkspace?.id, taskId);
+  const editCommentMutation = useEditComment(activeWorkspace?.id, taskId);
+  const deleteCommentMutation = useDeleteComment(activeWorkspace?.id, taskId);
+
+  // Local editing states
   const [isEditingTitle, setIsEditingTitle] = useState<boolean>(false);
   const [tempTitle, setTempTitle] = useState<string>('');
 
@@ -80,103 +67,85 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState<string>('');
 
-  const [loading, setLoading] = useState<boolean>(true);
+  // Deletion confirmation state
+  const [confirmDeleteCommentId, setConfirmDeleteCommentId] = useState<
+    string | null
+  >(null);
 
   const isAdminOrManager = activeRole === 'ADMIN' || activeRole === 'MANAGER';
   const canEditAllFields = activeRole === 'ADMIN' || activeRole === 'MANAGER';
 
-  const fetchTaskDetails = async () => {
-    if (!activeWorkspace) return;
-    try {
-      const res = await api.get(
-        `/workspaces/${activeWorkspace.id}/tasks/${taskId}`
-      );
-      setTask(res.data);
-      setTempTitle(res.data.title);
-      setTempDesc(res.data.description || '');
-      setTempStatus(res.data.status);
-    } catch (err) {
-      console.error('Failed to fetch task details', err);
-      onClose();
-    }
-  };
-
-  const fetchMembers = async () => {
-    if (!activeWorkspace) return;
-    try {
-      const res = await api.get(`/workspaces/${activeWorkspace.id}/members`);
-      setMembers(res.data);
-    } catch (err) {
-      console.error('Failed to fetch members list', err);
-    }
-  };
-
-  const fetchComments = async () => {
-    if (!activeWorkspace) return;
-    try {
-      const res = await api.get(
-        `/workspaces/${activeWorkspace.id}/tasks/${taskId}/comments`
-      );
-      setComments(res.data);
-    } catch (err) {
-      console.error('Failed to fetch comments', err);
-    }
-  };
-
-  const fetchLogs = async () => {
-    if (!activeWorkspace) return;
-    try {
-      const res = await api.get(
-        `/workspaces/${activeWorkspace.id}/tasks/${taskId}/logs`
-      );
-      setLogs(res.data);
-    } catch (err) {
-      console.error('Failed to fetch activity logs', err);
-    }
-  };
-
-  const loadData = async () => {
-    setLoading(true);
-    await Promise.all([
-      fetchTaskDetails(),
-      fetchMembers(),
-      fetchComments(),
-      fetchLogs(),
-    ]);
-    setLoading(false);
-  };
-
+  // Synchronize initial local edit states with queries
   useEffect(() => {
-    loadData();
-  }, [taskId, activeWorkspace]);
+    if (task) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTempTitle(task.title);
+      setTempDesc(task.description || '');
+      setTempStatus(task.status);
+    }
+  }, [task]);
 
-  // Real-time synchronization
+  // Real-time synchronization via socket invalidations
   useEffect(() => {
     if (!activeWorkspace) return;
-    const unbind = registerListener('task_updated', (data) => {
-      if (data?.id === taskId) {
-        fetchTaskDetails();
-        fetchLogs();
+    const unbind = registerListener('task_updated', (data: unknown) => {
+      const updateData = data as { id?: string } | null;
+      if (updateData?.id === taskId) {
+        queryClient.invalidateQueries({
+          queryKey: [queryKeys.GET_TASK_DETAIL, activeWorkspace.id, taskId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: [queryKeys.GET_TASK_LOGS, activeWorkspace.id, taskId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: [queryKeys.GET_TASKS, activeWorkspace.id],
+        });
       }
     });
     return () => unbind();
-  }, [activeWorkspace, taskId]);
+  }, [activeWorkspace, taskId, queryClient, registerListener]);
 
-  const handleUpdateField = async (fields: Partial<TaskDetails>) => {
-    if (!activeWorkspace || !task) return;
-    try {
-      // Optimistic updates
-      setTask((prev) => (prev ? { ...prev, ...fields } : null));
+  // Accessibility keyboard event listeners
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (confirmDeleteCommentId) return; // Prioritize confirm dialog Escape close
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose, confirmDeleteCommentId]);
 
-      await api.patch(
-        `/workspaces/${activeWorkspace.id}/tasks/${taskId}`,
-        fields
+  // Trap focus within the modal dialog
+  useEffect(() => {
+    const handleTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || !modalRef.current) return;
+      const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
       );
-      fetchLogs();
-    } catch (err) {
-      console.error('Failed to update task field', err);
-      fetchTaskDetails(); // Revert
-    }
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey && document.activeElement === first) {
+        last.focus();
+        e.preventDefault();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        first.focus();
+        e.preventDefault();
+      }
+    };
+    document.addEventListener('keydown', handleTab);
+    return () => document.removeEventListener('keydown', handleTab);
+  }, []);
+
+  const handleUpdateField = (fields: Partial<Task>) => {
+    updateFieldMutation.mutate(fields, {
+      onError: (err: unknown) => {
+        toast.error(getMessageFromError(err));
+      },
+    });
   };
 
   const handleTitleBlur = () => {
@@ -196,22 +165,21 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   };
 
   // Comments CRUD Handlers
-  const handleAddCommentSubmit = async (e: React.FormEvent) => {
+  const handleAddCommentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newComment.trim() || !activeWorkspace) return;
-    try {
-      await api.post(
-        `/workspaces/${activeWorkspace.id}/tasks/${taskId}/comments`,
-        {
-          text: newComment.trim(),
-        }
-      );
-      setNewComment('');
-      fetchComments();
-      fetchLogs();
-    } catch (err) {
-      console.error('Failed to add comment', err);
-    }
+    addCommentMutation.mutate(
+      { text: newComment.trim() },
+      {
+        onSuccess: () => {
+          setNewComment('');
+          toast.success('Comment added successfully');
+        },
+        onError: (err: unknown) => {
+          toast.error(getMessageFromError(err));
+        },
+      }
+    );
   };
 
   const handleStartEditComment = (commentId: string, text: string) => {
@@ -219,39 +187,38 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     setEditingCommentText(text);
   };
 
-  const handleSaveEditComment = async (commentId: string) => {
+  const handleSaveEditComment = (commentId: string) => {
     if (!editingCommentText.trim() || !activeWorkspace) return;
-    try {
-      await api.patch(
-        `/workspaces/${activeWorkspace.id}/comments/${commentId}`,
-        {
-          text: editingCommentText.trim(),
-        }
-      );
-      setEditingCommentId(null);
-      fetchComments();
-    } catch (err) {
-      console.error('Failed to edit comment', err);
-    }
+    editCommentMutation.mutate(
+      { commentId, text: editingCommentText.trim() },
+      {
+        onSuccess: () => {
+          setEditingCommentId(null);
+          toast.success('Comment updated successfully');
+        },
+        onError: (err: unknown) => {
+          toast.error(getMessageFromError(err));
+        },
+      }
+    );
   };
 
-  const handleDeleteComment = async (commentId: string) => {
-    if (!activeWorkspace || !window.confirm('Delete this comment permanently?'))
-      return;
-    try {
-      await api.delete(
-        `/workspaces/${activeWorkspace.id}/comments/${commentId}`
-      );
-      fetchComments();
-      fetchLogs();
-    } catch (err) {
-      console.error('Failed to delete comment', err);
-    }
+  const handleDeleteCommentConfirm = () => {
+    if (!confirmDeleteCommentId) return;
+    deleteCommentMutation.mutate(confirmDeleteCommentId, {
+      onSuccess: () => {
+        setConfirmDeleteCommentId(null);
+        toast.success('Comment deleted successfully');
+      },
+      onError: (err: unknown) => {
+        toast.error(getMessageFromError(err));
+      },
+    });
   };
 
-  if (loading || !task) {
+  if (isTaskLoading || !task) {
     return (
-      <div className="fixed inset-0 bg-ink/75 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="fixed inset-0 krumos-overlay flex items-center justify-center z-50 p-4">
         <div className="bg-bone border border-ink text-ink max-w-sm w-full p-6 text-center space-y-4">
           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-ink mx-auto"></div>
           <p className="krumos-eyebrow text-xs">Fetching task card data...</p>
@@ -261,12 +228,19 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 bg-ink/75 backdrop-blur-sm flex items-center justify-center z-50 p-4 select-none">
+    <div
+      ref={modalRef}
+      className="fixed inset-0 krumos-overlay flex items-center justify-center z-50 p-4 select-none"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="task-portal-title"
+    >
       <div className="bg-bone border border-ink text-ink max-w-4xl w-full h-[90vh] flex flex-col relative shadow-2xl">
         {/* Close Button Anchor */}
         <button
           onClick={onClose}
           className="absolute right-4 top-4 text-ink/65 hover:text-ink hover:bg-ink/5 p-1 rounded-none border border-transparent hover:border-ink/10 transition-all cursor-pointer"
+          aria-label="Close task portal"
         >
           <X size={18} />
         </button>
@@ -289,6 +263,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
               />
             ) : (
               <h2
+                id="task-portal-title"
                 onClick={() => canEditAllFields && setIsEditingTitle(true)}
                 className={`text-lg font-bold text-ink uppercase tracking-wide flex items-center space-x-2 ${
                   canEditAllFields ? 'cursor-pointer hover:underline' : ''
@@ -406,14 +381,18 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                       >
                         <div className="flex justify-between items-center">
                           <div className="flex items-center space-x-2 min-w-0">
-                            <img
-                              src={
-                                c.author?.picture ||
-                                'https://via.placeholder.com/150'
-                              }
-                              alt={c.author?.name}
-                              className="w-5 h-5 rounded-none border border-ink/10"
-                            />
+                            {/* Local default avatar fallback instead of external service */}
+                            <div className="w-5 h-5 bg-ink text-bone border border-ink/10 flex items-center justify-center font-mono text-[9px] font-bold">
+                              {c.author?.picture ? (
+                                <img
+                                  src={c.author.picture}
+                                  alt={c.author.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                c.author?.name.substring(0, 1).toUpperCase()
+                              )}
+                            </div>
                             <span className="text-[10px] font-bold text-ink uppercase truncate">
                               {c.author?.name}
                             </span>
@@ -436,7 +415,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                             )}
                             {canDelete && (
                               <button
-                                onClick={() => handleDeleteComment(c.id)}
+                                onClick={() => setConfirmDeleteCommentId(c.id)}
                                 className="text-[9px] font-mono text-orange-accent hover:text-orange-hot uppercase"
                               >
                                 Delete
@@ -496,7 +475,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                 </label>
                 <select
                   value={tempStatus}
-                  onChange={(e) => setTempStatus(e.target.value as any)}
+                  onChange={(e) =>
+                    setTempStatus(e.target.value as Task['status'])
+                  }
                   className="w-full bg-bone border border-ink/20 px-2.5 py-1.5 text-[10px] font-mono font-bold text-ink focus:outline-none"
                 >
                   <option value="TO_DO">TO DO</option>
@@ -514,7 +495,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     </button>
                     <button
                       onClick={() =>
-                        handleUpdateField({ status: tempStatus as any })
+                        handleUpdateField({
+                          status: tempStatus as Task['status'],
+                        })
                       }
                       className="flex-1 px-3 py-1 bg-ink text-bone text-[9px] font-mono krumos-mono-btn hover:bg-ink-soft text-center"
                     >
@@ -533,7 +516,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                   value={task.priority}
                   disabled={!canEditAllFields}
                   onChange={(e) =>
-                    handleUpdateField({ priority: e.target.value as any })
+                    handleUpdateField({
+                      priority: e.target.value as Task['priority'],
+                    })
                   }
                   className="w-full bg-bone border border-ink/20 px-2.5 py-1.5 text-[10px] font-mono font-bold text-ink focus:outline-none disabled:opacity-75 disabled:cursor-not-allowed"
                 >
@@ -626,6 +611,15 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Confirm Deletion of Comment */}
+      <ConfirmDialog
+        isOpen={confirmDeleteCommentId !== null}
+        title="DELETE COMMENT"
+        message="Are you sure you want to delete this comment permanently? This action is absolute and cannot be undone."
+        onConfirm={handleDeleteCommentConfirm}
+        onCancel={() => setConfirmDeleteCommentId(null)}
+      />
     </div>
   );
 };

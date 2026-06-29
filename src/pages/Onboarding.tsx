@@ -1,15 +1,29 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useWorkspace } from '../context/WorkspaceContext';
 import { LogOut, ArrowRight, Server } from 'lucide-react';
 import useAppNavigate from '../hooks/useAppNavigate';
 import { getMessageFromError } from '../utils';
 
 const Onboarding: React.FC = () => {
-  const { createWorkspace, logout } = useAuth();
+  const { logout } = useAuth();
+  const { createWorkspace } = useWorkspace();
   const [workspaceName, setWorkspaceName] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   const navigate = useAppNavigate();
+
+  // Force light theme on onboarding page
+  useEffect(() => {
+    const prevDark = document.documentElement.classList.contains('dark');
+    document.documentElement.classList.remove('dark');
+    return () => {
+      // Restore on unmount if it was previously dark
+      if (prevDark) {
+        document.documentElement.classList.add('dark');
+      }
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

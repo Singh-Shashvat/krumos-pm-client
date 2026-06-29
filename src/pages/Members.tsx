@@ -1,6 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useWorkspace } from '../context/WorkspaceContext';
 import { useSocket } from '../context/SocketContext';
+import { useToast } from '../context/ToastContext';
 import { useQueryClient } from '@tanstack/react-query';
 import queryKeys from '../api/queryKeys';
 import {
@@ -15,10 +17,13 @@ import { getMessageFromError } from '../utils';
 import { InviteMemberForm } from '../components/members/InviteMemberForm';
 import { PendingInvitesList } from '../components/members/PendingInvitesList';
 import { MemberListItem } from '../components/members/MemberListItem';
+import { ConfirmDialog } from '../components/common/ConfirmDialog';
 
 const Members: React.FC = () => {
-  const { activeWorkspace, activeRole, user: currentUser } = useAuth();
+  const { user: currentUser } = useAuth();
+  const { activeWorkspace, activeRole } = useWorkspace();
   const { registerListener } = useSocket();
+  const toast = useToast();
   const queryClient = useQueryClient();
 
   const isAdmin = activeRole === 'ADMIN';
@@ -36,6 +41,15 @@ const Members: React.FC = () => {
 
   const loading = loadingMembers || (isAdmin && loadingInvitations);
 
+  // Confirmations
+  const [confirmRevokeInviteId, setConfirmRevokeInviteId] = useState<
+    string | null
+  >(null);
+  const [confirmRemoveMember, setConfirmRemoveMember] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+
   // Real-time roster listener
   useEffect(() => {
     if (!activeWorkspace) return;
@@ -50,12 +64,21 @@ const Members: React.FC = () => {
     return () => unbind();
   }, [activeWorkspace, queryClient, registerListener]);
 
-  const handleRevokeInvite = (inviteId: string) => {
-    if (!window.confirm('Are you sure you want to revoke this invitation?'))
-      return;
-    revokeInviteMutation.mutate(inviteId, {
-      onError: (err) => {
+  const handleRevokeInviteClick = (inviteId: string) => {
+    setConfirmRevokeInviteId(inviteId);
+  };
+
+  const handleRevokeInviteConfirm = () => {
+    if (!confirmRevokeInviteId) return;
+    revokeInviteMutation.mutate(confirmRevokeInviteId, {
+      onSuccess: () => {
+        toast.success('Invitation revoked successfully');
+        setConfirmRevokeInviteId(null);
+      },
+      onError: (err: unknown) => {
         console.error('Failed to revoke invite', err);
+        toast.error(getMessageFromError(err));
+        setConfirmRevokeInviteId(null);
       },
     });
   };
@@ -67,23 +90,30 @@ const Members: React.FC = () => {
     updateRoleMutation.mutate(
       { memberId, role: newRole },
       {
+        onSuccess: () => {
+          toast.success('Member role updated successfully');
+        },
         onError: (err: unknown) => {
-          alert(getMessageFromError(err));
+          toast.error(getMessageFromError(err));
         },
       }
     );
   };
 
-  const handleRemoveMember = (memberId: string, name: string) => {
-    if (
-      !window.confirm(
-        `Are you sure you want to remove ${name} from this workspace?`
-      )
-    )
-      return;
-    deleteMemberMutation.mutate(memberId, {
+  const handleRemoveMemberClick = (memberId: string, name: string) => {
+    setConfirmRemoveMember({ id: memberId, name });
+  };
+
+  const handleRemoveMemberConfirm = () => {
+    if (!confirmRemoveMember) return;
+    deleteMemberMutation.mutate(confirmRemoveMember.id, {
+      onSuccess: () => {
+        toast.success(`Removed ${confirmRemoveMember.name} from workspace`);
+        setConfirmRemoveMember(null);
+      },
       onError: (err: unknown) => {
-        alert(getMessageFromError(err));
+        toast.error(getMessageFromError(err));
+        setConfirmRemoveMember(null);
       },
     });
   };
@@ -105,7 +135,7 @@ const Members: React.FC = () => {
           <InviteMemberForm workspaceId={activeWorkspace?.id} />
           <PendingInvitesList
             invitations={invitations}
-            onRevoke={handleRevokeInvite}
+            onRevoke={handleRevokeInviteClick}
           />
         </div>
       )}
@@ -132,11 +162,29 @@ const Members: React.FC = () => {
               currentUserId={currentUser?.id}
               isAdmin={isAdmin}
               onRoleChange={handleRoleChange}
-              onRemove={handleRemoveMember}
+              onRemove={handleRemoveMemberClick}
             />
           ))}
         </div>
       </div>
+
+      {/* Revoke Invite Confirmation */}
+      <ConfirmDialog
+        isOpen={confirmRevokeInviteId !== null}
+        title="REVOKE INVITATION"
+        message="Are you sure you want to revoke this pending invitation? The recipient will no longer be able to join the workspace with their invite link."
+        onConfirm={handleRevokeInviteConfirm}
+        onCancel={() => setConfirmRevokeInviteId(null)}
+      />
+
+      {/* Remove Member Confirmation */}
+      <ConfirmDialog
+        isOpen={confirmRemoveMember !== null}
+        title="REMOVE MEMBER"
+        message={`Are you sure you want to remove ${confirmRemoveMember?.name} from this workspace? they will lose access to all projects and tasks.`}
+        onConfirm={handleRemoveMemberConfirm}
+        onCancel={() => setConfirmRemoveMember(null)}
+      />
     </div>
   );
 };

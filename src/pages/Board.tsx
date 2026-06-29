@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useWorkspace } from '../context/WorkspaceContext';
 import { useSocket } from '../context/SocketContext';
+import { useToast } from '../context/ToastContext';
 import { useQueryClient } from '@tanstack/react-query';
 import queryKeys from '../api/queryKeys';
 import { getMessageFromError } from '../utils';
@@ -20,12 +21,14 @@ import { CreateProjectModal } from '../components/board/CreateProjectModal';
 import { CreateTaskModal } from '../components/board/CreateTaskModal';
 import { BoardColumn } from '../components/board/BoardColumn';
 import { BoardHeader } from '../components/board/BoardHeader';
+import { ConfirmDialog } from '../components/common/ConfirmDialog';
 
 import type { Project, Task } from '../types/board';
 
 const Board: React.FC = () => {
-  const { activeWorkspace, activeRole } = useAuth();
+  const { activeWorkspace, activeRole } = useWorkspace();
   const { registerListener } = useSocket();
+  const toast = useToast();
   const queryClient = useQueryClient();
 
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -43,6 +46,11 @@ const Board: React.FC = () => {
     null
   );
   const [projectSettingsOpen, setProjectSettingsOpen] =
+    useState<boolean>(false);
+
+  // Confirmations
+  const [showConfirmArchive, setShowConfirmArchive] = useState<boolean>(false);
+  const [showConfirmDeleteProject, setShowConfirmDeleteProject] =
     useState<boolean>(false);
 
   const isPrivileged = activeRole === 'ADMIN' || activeRole === 'MANAGER';
@@ -124,10 +132,11 @@ const Board: React.FC = () => {
       {
         onSuccess: (newProj) => {
           setSelectedProject(newProj);
+          toast.success('Project created successfully');
         },
-        onError: (err) => {
+        onError: (err: unknown) => {
           console.error('Failed to create project', err);
-          alert('Failed to create project. Please try again.');
+          toast.error(getMessageFromError(err));
         },
       }
     );
@@ -144,9 +153,12 @@ const Board: React.FC = () => {
 
     setShowCreateTask(false);
     createTaskMutation.mutate(data, {
-      onError: (err) => {
+      onSuccess: () => {
+        toast.success('Task created successfully');
+      },
+      onError: (err: unknown) => {
         console.error('Failed to create task', err);
-        alert('Failed to create task. Please try again.');
+        toast.error(getMessageFromError(err));
       },
     });
   };
@@ -184,48 +196,56 @@ const Board: React.FC = () => {
   };
 
   // Project archiving/deleting commands
-  const handleArchiveProject = async () => {
+  const handleArchiveProjectTrigger = () => {
+    if (!selectedProject) return;
+    setShowConfirmArchive(true);
+  };
+
+  const handleArchiveProjectConfirm = () => {
     if (!selectedProject) return;
     const isArchived = selectedProject.status === 'ARCHIVED';
     const endpoint = isArchived ? 'activate' : 'archive';
-    if (
-      !window.confirm(
-        `Are you sure you want to ${isArchived ? 'reactivate' : 'archive'} this project?`
-      )
-    )
-      return;
 
     archiveProjectMutation.mutate(
       { projectId: selectedProject.id, endpoint },
       {
-        onError: (err) => {
+        onSuccess: () => {
+          toast.success(
+            `Project ${isArchived ? 'activated' : 'archived'} successfully`
+          );
+          setShowConfirmArchive(false);
+        },
+        onError: (err: unknown) => {
           console.error('Project status modification failed', err);
+          toast.error(getMessageFromError(err));
+          setShowConfirmArchive(false);
         },
       }
     );
   };
 
-  const handleDeleteProject = async () => {
+  const handleDeleteProjectTrigger = () => {
     if (!selectedProject) return;
-    const confirmName = window.prompt(
-      `CAUTION: To permanently delete project "${selectedProject.name}" and all its tasks/comments, type the project name below:`
-    );
-    if (confirmName === null) return;
-    if (
-      confirmName.trim().toLowerCase() !== selectedProject.name.toLowerCase()
-    ) {
-      alert('Confirmation name mismatch. Action cancelled.');
-      return;
-    }
+    setShowConfirmDeleteProject(true);
+  };
+
+  const handleDeleteProjectConfirm = () => {
+    if (!selectedProject) return;
 
     deleteProjectMutation.mutate(
-      { projectId: selectedProject.id, confirmName: confirmName.trim() },
+      {
+        projectId: selectedProject.id,
+        confirmName: selectedProject.name.trim(),
+      },
       {
         onSuccess: () => {
           setSelectedProject(null);
+          toast.success('Project deleted successfully');
+          setShowConfirmDeleteProject(false);
         },
         onError: (err: unknown) => {
-          alert(getMessageFromError(err));
+          toast.error(getMessageFromError(err));
+          setShowConfirmDeleteProject(false);
         },
       }
     );
@@ -265,8 +285,8 @@ const Board: React.FC = () => {
         onCreateTaskClick={() => setShowCreateTask(true)}
         projectSettingsOpen={projectSettingsOpen}
         setProjectSettingsOpen={setProjectSettingsOpen}
-        onArchiveProject={handleArchiveProject}
-        onDeleteProject={handleDeleteProject}
+        onArchiveProject={handleArchiveProjectTrigger}
+        onDeleteProject={handleDeleteProjectTrigger}
         filterAssignee={filterAssignee}
         setFilterAssignee={setFilterAssignee}
         filterPriority={filterPriority}
@@ -342,6 +362,32 @@ const Board: React.FC = () => {
         onClose={() => setShowCreateTask(false)}
         onSubmit={handleCreateTaskSubmit}
         members={members}
+      />
+
+      {/* Archive Project Confirmation */}
+      <ConfirmDialog
+        isOpen={showConfirmArchive}
+        title={
+          selectedProject?.status === 'ARCHIVED'
+            ? 'ACTIVATE PROJECT'
+            : 'ARCHIVE PROJECT'
+        }
+        message={`Are you sure you want to ${
+          selectedProject?.status === 'ARCHIVED' ? 'reactivate' : 'archive'
+        } project "${selectedProject?.name}"?`}
+        onConfirm={handleArchiveProjectConfirm}
+        onCancel={() => setShowConfirmArchive(false)}
+      />
+
+      {/* Delete Project Confirmation */}
+      <ConfirmDialog
+        isOpen={showConfirmDeleteProject}
+        title="DELETE PROJECT"
+        message={`CAUTION: You are about to permanently delete the project "${selectedProject?.name}" and all of its tasks and comments. This action cannot be undone.`}
+        confirmText={selectedProject?.name}
+        confirmButtonText="DELETE PROJECT"
+        onConfirm={handleDeleteProjectConfirm}
+        onCancel={() => setShowConfirmDeleteProject(false)}
       />
     </div>
   );

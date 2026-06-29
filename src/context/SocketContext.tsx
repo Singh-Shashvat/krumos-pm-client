@@ -1,15 +1,17 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+} from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
+import { useWorkspace } from './WorkspaceContext';
 import api, { API_BASE_URL } from '../services/api';
-
-export interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  isRead: boolean;
-  createdAt: string;
-}
+import type { Notification } from '../types/socket';
 
 interface SocketContextType {
   socket: Socket | null;
@@ -21,7 +23,7 @@ interface SocketContextType {
   markAllAsRead: () => Promise<void>;
   registerListener: (
     event: string,
-    callback: (...args: any[]) => void
+    callback: (data: unknown) => void
   ) => () => void;
 }
 
@@ -30,16 +32,17 @@ const SocketContext = createContext<SocketContextType | undefined>(undefined);
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { user, activeWorkspace } = useAuth();
+  const { user, token } = useAuth();
+  const { activeWorkspace } = useWorkspace();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState<boolean>(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const listenersRef = useRef<{
-    [event: string]: ((...args: any[]) => void)[];
+    [event: string]: ((data: unknown) => void)[];
   }>({});
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     if (!activeWorkspace) return;
     try {
       const res = await api.get(
@@ -51,7 +54,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch (err) {
       console.error('Failed to fetch notifications', err);
     }
-  };
+  }, [activeWorkspace]);
 
   const markAsRead = async (notificationId: string) => {
     if (!activeWorkspace) return;
@@ -82,7 +85,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const registerListener = useCallback(
-    (event: string, callback: (...args: any[]) => void) => {
+    (event: string, callback: (data: unknown) => void) => {
       listenersRef.current = {
         ...listenersRef.current,
         [event]: [...(listenersRef.current[event] || []), callback],
@@ -111,7 +114,9 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!user) {
       if (socket) {
         socket.disconnect();
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSocket(null);
+
         setConnected(false);
       }
       return;
@@ -120,10 +125,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     const socketUrl = API_BASE_URL;
     const newSocket = io(socketUrl, {
       transports: ['websocket'],
+      auth: {
+        token: token || localStorage.getItem('krumos_token'),
+      },
     });
 
     newSocket.on('connect', () => {
       console.log('Socket.io connected');
+
       setConnected(true);
 
       // Join rooms
@@ -135,6 +144,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
 
     newSocket.on('disconnect', () => {
       console.log('Socket.io disconnected');
+
       setConnected(false);
     });
 
@@ -161,15 +171,17 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => {
       newSocket.disconnect();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   // Handle active workspace changing
   useEffect(() => {
     if (socket && activeWorkspace) {
       socket.emit('join_workspace', { workspaceId: activeWorkspace.id });
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchNotifications();
     }
-  }, [activeWorkspace, socket]);
+  }, [activeWorkspace, socket, fetchNotifications]);
 
   return (
     <SocketContext.Provider
