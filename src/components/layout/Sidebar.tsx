@@ -12,7 +12,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import krumosFullIcon from '../../assets/krumos_full_logo.svg';
-import krumosIcon from '../../../public/favicon_v2.svg';
+import krumosIcon from '../../assets/favicon_v2.svg';
 
 interface SidebarProps {
   collapsed: boolean;
