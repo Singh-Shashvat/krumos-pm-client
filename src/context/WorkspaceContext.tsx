@@ -36,7 +36,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
     null
   );
   const [activeRole, setActiveRole] = useState<WorkspaceRole | null>(null);
-  const [loadingWorkspaces, setLoadingWorkspaces] = useState<boolean>(false);
+  const [loadingWorkspaces, setLoadingWorkspaces] = useState<boolean>(true);
 
   const fetchWorkspaces = useCallback(async (): Promise<Workspace[]> => {
     try {
@@ -130,6 +130,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         setWorkspaces([]);
         setActiveWorkspace(null);
         setActiveRole(null);
+        setLoadingWorkspaces(false);
         return;
       }
 
@@ -139,9 +140,15 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({
         if (list.length > 0) {
           const storedId = localStorage.getItem('krumos_active_workspace_id');
           const matched = storedId ? list.find((w) => w.id === storedId) : null;
-          const toSelect = matched || list[0];
-          await selectWorkspaceInternal(toSelect, user.id);
+          
+          if (matched) {
+            await selectWorkspaceInternal(matched, user.id);
+          } else if (list.length === 1) {
+            await selectWorkspaceInternal(list[0], user.id);
+          }
         }
+        setLoadingWorkspaces(false);
+      } else {
         setLoadingWorkspaces(false);
       }
     };

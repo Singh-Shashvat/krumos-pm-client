@@ -20,7 +20,7 @@ test.describe('Authentication & Workspace Routing Guards', () => {
 
     // Confirm that the Google Sign-in action button exists
     const googleButton = page.locator(
-      'button:has-text("PROCEED TO AUTHENTICATION")'
+      'button:has-text("SIGN IN WITH GOOGLE")'
     );
     await expect(googleButton).toBeVisible();
   });

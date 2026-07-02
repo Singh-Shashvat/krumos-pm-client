@@ -9,7 +9,7 @@ import { WorkspaceSelectionOverlay } from './layout/WorkspaceSelectionOverlay';
 import { getMessageFromError } from '../utils';
 
 const WorkspaceLayout: React.FC = () => {
-  const { activeWorkspace, createWorkspace } = useWorkspace();
+  const { activeWorkspace, createWorkspace, loadingWorkspaces } = useWorkspace();
   const toast = useToast();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(true);
@@ -55,6 +55,17 @@ const WorkspaceLayout: React.FC = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  if (loadingWorkspaces) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-bone text-ink select-none font-sans">
+        <div className="space-y-4 text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-ink mx-auto"></div>
+          <p className="krumos-eyebrow text-sm">Loading Workspaces...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleCreateWorkspaceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
